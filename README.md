@@ -348,6 +348,12 @@ When SpicyDiff runs, it posts two types of comments on your PR:
 | `mode` | No | `ROAST` | `ROAST` = brutal critic, `PRAISE` = blind fan |
 | `language` | No | `en` | `zh` = Chinese output, `en` = English output |
 | `base-url` | No | *(auto)* | Custom API URL. If set, overrides `provider` |
+| `temperature` | No | `0.7` | LLM sampling temperature (0.0 = deterministic, 1.0 = creative) |
+| `max-tokens` | No | `4096` | Maximum tokens in the LLM response |
+| `max-diff-chars` | No | `60000` | Maximum diff size (chars) sent to the LLM. Larger diffs are automatically truncated |
+| `exclude-patterns` | No | — | Comma-separated glob patterns to skip (e.g. `"*.test.js,docs/**"`) |
+| `pr-number` | No | *(auto)* | PR number (auto-detected; set manually for `workflow_dispatch`) |
+| `dry-run` | No | `false` | If `true`, prints review to Action logs without posting to GitHub |
 
 ### Provider Shortcuts
 
@@ -365,7 +371,8 @@ Instead of remembering API URLs, just set `provider` to one of these:
 | `baichuan` | Baichuan AI | `Baichuan4` | `api.baichuan-ai.com` |
 | `minimax` | MiniMax | `abab6.5s-chat` | `api.minimax.chat` |
 | `gemini` | Google Gemini | `gemini-2.0-flash` | `generativelanguage.googleapis.com` |
-| `claude` | Anthropic Claude | `claude-sonnet-4-20250514` | `api.anthropic.com` |
+
+> **Note on Claude:** Anthropic's API is not OpenAI-compatible. To use Claude, set up an OpenAI-compatible proxy (e.g. [LiteLLM](https://github.com/BerriAI/litellm) or [one-api](https://github.com/songquanpeng/one-api)) and configure `base-url` manually.
 
 ---
 
@@ -418,6 +425,30 @@ Not dynamically — the mode is set in the YAML file. But you can create two wor
 .github/workflows/spicydiff-roast.yml   # mode: "ROAST"
 .github/workflows/spicydiff-praise.yml  # mode: "PRAISE"
 ```
+
+### How do I test without posting comments?
+
+Use dry-run mode. It prints the full review to the Action logs without touching the PR:
+
+```yaml
+dry-run: "true"
+```
+
+### My PR is huge. Will SpicyDiff crash?
+
+No. Diffs are automatically truncated to 60,000 characters (~15k tokens) by default. You can adjust this with `max-diff-chars`. Files beyond the limit are skipped, and the LLM is told which files were omitted.
+
+### Can I exclude test files or documentation?
+
+Yes. Use `exclude-patterns` with comma-separated globs:
+
+```yaml
+exclude-patterns: "*.test.js,*.spec.ts,docs/**"
+```
+
+### Can I use Anthropic Claude?
+
+Not directly — the Anthropic API is not OpenAI-compatible. Use an OpenAI-compatible proxy like [LiteLLM](https://github.com/BerriAI/litellm) or [one-api](https://github.com/songquanpeng/one-api), then set `base-url` to your proxy.
 
 ---
 
@@ -479,20 +510,23 @@ pytest tests/ -v
 ```
 SpicyDiff/
 ├── action.yml              # GitHub Action descriptor
-├── Dockerfile              # Container image
+├── Dockerfile              # Container image (non-root)
 ├── requirements.txt        # Python dependencies
+├── .github/workflows/
+│   └── ci.yml              # CI: tests on Python 3.9–3.12, lint, Docker build
 ├── spicydiff/
 │   ├── __init__.py
 │   ├── __main__.py         # python -m spicydiff entry point
-│   ├── main.py             # Pipeline orchestrator
-│   ├── config.py           # Reads configuration from environment
+│   ├── main.py             # Pipeline orchestrator (with dry-run support)
+│   ├── config.py           # Reads all configuration from environment
 │   ├── models.py           # Data models (Pydantic)
-│   ├── providers.py        # LLM provider presets (DeepSeek, Qwen, etc.)
-│   ├── prompts.py          # ROAST / PRAISE prompt templates
-│   ├── llm_client.py       # Calls the LLM API
-│   ├── diff_parser.py      # Fetches and parses PR diffs
-│   └── github_client.py    # Posts comments to GitHub
-└── tests/                  # Unit tests
+│   ├── providers.py        # LLM provider presets (10 built-in providers)
+│   ├── prompts.py          # ROAST / PRAISE prompt templates (zh + en)
+│   ├── llm_client.py       # LLM API with retry, timeout, fence stripping
+│   ├── diff_parser.py      # PR diff with size limits + custom excludes
+│   ├── github_client.py    # GitHub comments with retry + i18n labels
+│   └── logger.py           # Structured logging with GitHub Actions annotations
+└── tests/                  # 106 unit tests
 ```
 
 ---

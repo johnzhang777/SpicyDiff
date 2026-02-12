@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Dict, Set
+import time
+from typing import Dict, List, Set
 
+from github import GithubException
 from github.PullRequest import PullRequest
 
-from .models import Mode, ReviewResult
+from .logger import log
+from .models import Language, Mode, ReviewResult
+
+# Hidden HTML marker to reliably identify SpicyDiff comments
+_MARKER = "<!-- spicydiff-review -->"
 
 # Score thresholds for emoji decoration
 _SCORE_EMOJI = {
@@ -17,6 +23,14 @@ _SCORE_EMOJI = {
     range(80, 101): "🚀",
 }
 
+# Mode labels per language
+_MODE_LABELS = {
+    (Mode.ROAST, Language.ZH): "🌶️ 地狱厨房模式 (ROAST)",
+    (Mode.ROAST, Language.EN): "🌶️ Hell's Kitchen Mode (ROAST)",
+    (Mode.PRAISE, Language.ZH): "🌈 夸夸群模式 (PRAISE)",
+    (Mode.PRAISE, Language.EN): "🌈 Praise Mode (PRAISE)",
+}
+
 
 def _score_emoji(score: int) -> str:
     for rng, emoji in _SCORE_EMOJI.items():
@@ -25,29 +39,37 @@ def _score_emoji(score: int) -> str:
     return ""
 
 
-def _build_summary_body(result: ReviewResult, mode: Mode) -> str:
+def _build_summary_body(result: ReviewResult, mode: Mode, language: Language = Language.ZH) -> str:
     """Build a Markdown summary comment body."""
     emoji = _score_emoji(result.score)
-    mode_label = "🌶️ 地狱厨房模式 (ROAST)" if mode == Mode.ROAST else "🌈 夸夸群模式 (PRAISE)"
-    header = f"## SpicyDiff Review {emoji}\n\n"
+    mode_label = _MODE_LABELS.get((mode, language), _MODE_LABELS[(mode, Language.EN)])
+    header = f"{_MARKER}\n## SpicyDiff Review {emoji}\n\n"
     meta = f"**Mode**: {mode_label}  \n**Score**: {result.score}/100 {emoji}\n\n"
     body = f"---\n\n{result.summary}\n"
     return header + meta + body
 
 
-def post_summary_comment(pr: PullRequest, result: ReviewResult, mode: Mode) -> None:
+def post_summary_comment(
+    pr: PullRequest,
+    result: ReviewResult,
+    mode: Mode,
+    language: Language = Language.ZH,
+) -> None:
     """Post (or update) the summary comment on the PR."""
-    body = _build_summary_body(result, mode)
+    body = _build_summary_body(result, mode, language)
 
     # Try to find an existing SpicyDiff comment to update (avoid spam)
-    for comment in pr.get_issue_comments():
-        if comment.body and comment.body.startswith("## SpicyDiff Review"):
-            comment.edit(body)
-            print("Updated existing SpicyDiff summary comment.")
-            return
+    try:
+        for comment in pr.get_issue_comments():
+            if comment.body and _MARKER in comment.body:
+                comment.edit(body)
+                log.info("Updated existing SpicyDiff summary comment.")
+                return
+    except GithubException as exc:
+        log.warning("Failed to list existing comments: %s", exc)
 
-    pr.create_issue_comment(body)
-    print("Created new SpicyDiff summary comment.")
+    _retry_github_call(lambda: pr.create_issue_comment(body))
+    log.info("Created new SpicyDiff summary comment.")
 
 
 def post_inline_comments(
@@ -57,28 +79,28 @@ def post_inline_comments(
 ) -> None:
     """Post inline review comments on the specific diff lines.
 
-    GitHub's "create_review" API is used to batch all comments into a single
+    GitHub's ``create_review`` API is used to batch all comments into a single
     review so we don't flood the PR with individual comment notifications.
     """
     if not result.reviews:
-        print("No inline reviews to post.")
+        log.info("No inline reviews to post.")
         return
 
     # Gather the latest commit SHA (required by the review API)
     commits = list(pr.get_commits())
     if not commits:
-        print("::warning::No commits found in the PR; skipping inline comments.")
+        log.warning("No commits found in the PR; skipping inline comments.")
         return
-    head_sha = commits[-1].sha
 
-    comments_payload = []
+    comments_payload: List[dict] = []
     for review in result.reviews:
         file_lines = changed_lines.get(review.file_path, set())
         # Only post if the line is actually part of the diff (GitHub API requirement)
         if review.line_number not in file_lines:
-            print(
-                f"::warning::Skipping comment on {review.file_path}:{review.line_number} "
-                "(line not in diff)."
+            log.warning(
+                "Skipping comment on %s:%d (line not in diff).",
+                review.file_path,
+                review.line_number,
             )
             continue
         comments_payload.append(
@@ -90,13 +112,40 @@ def post_inline_comments(
         )
 
     if not comments_payload:
-        print("All inline comments fell outside the diff; nothing to post.")
+        log.info("All inline comments fell outside the diff; nothing to post.")
         return
 
-    pr.create_review(
-        commit=commits[-1],
-        body="",
-        event="COMMENT",
-        comments=comments_payload,
-    )
-    print(f"Posted {len(comments_payload)} inline review comment(s).")
+    def _do_review():
+        pr.create_review(
+            commit=commits[-1],
+            body="",
+            event="COMMENT",
+            comments=comments_payload,
+        )
+
+    _retry_github_call(_do_review)
+    log.info("Posted %d inline review comment(s).", len(comments_payload))
+
+
+def _retry_github_call(func, max_retries: int = 3) -> None:
+    """Execute a GitHub API call with retries and exponential backoff.
+
+    Handles rate-limiting (403/429) and server errors (5xx).
+    """
+    for attempt in range(max_retries):
+        try:
+            func()
+            return
+        except GithubException as exc:
+            status = exc.status
+            if status in (403, 429) or status >= 500:
+                wait = 2 ** attempt  # 1s, 2s, 4s
+                log.warning(
+                    "GitHub API error %d (attempt %d/%d). Retrying in %ds...",
+                    status, attempt + 1, max_retries, wait,
+                )
+                time.sleep(wait)
+            else:
+                raise  # non-retryable error
+    # Final attempt — let it raise
+    func()

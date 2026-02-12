@@ -17,6 +17,14 @@ class TestProviderRegistry:
         expected = {"openai", "deepseek", "qwen", "doubao", "zhipu", "moonshot", "gemini", "yi", "baichuan", "minimax"}
         assert expected.issubset(set(PROVIDERS.keys()))
 
+    def test_claude_not_in_registry(self):
+        """Claude is not OpenAI-compatible and should not be a built-in provider."""
+        assert "claude" not in PROVIDERS
+
+    def test_all_providers_are_openai_compatible(self):
+        for key, preset in PROVIDERS.items():
+            assert preset.openai_compatible is True, f"{key} is not marked as OpenAI-compatible"
+
 
 class TestResolveProvider:
     # --- Provider shortcut ---
@@ -61,6 +69,10 @@ class TestResolveProvider:
     def test_unknown_provider_raises(self):
         with pytest.raises(ValueError, match="Unknown provider"):
             resolve_provider("not-a-real-provider", None, None)
+
+    def test_claude_shortcut_raises(self):
+        with pytest.raises(ValueError, match="Unknown provider"):
+            resolve_provider("claude", None, None)
 
     # --- Explicit base_url always wins ---
     def test_explicit_base_url_overrides_provider(self):

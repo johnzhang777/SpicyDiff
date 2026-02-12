@@ -33,6 +33,30 @@ inputs:
     description: "Custom base URL for any OpenAI-compatible API (overrides provider preset)"
     required: false
     default: ""
+  temperature:
+    description: "LLM sampling temperature (0.0 = deterministic, 1.0 = creative). Default: 0.7"
+    required: false
+    default: "0.7"
+  max-tokens:
+    description: "Maximum tokens in the LLM response. Default: 4096"
+    required: false
+    default: "4096"
+  max-diff-chars:
+    description: "Maximum diff size (chars) sent to the LLM. Larger diffs are truncated. Default: 60000"
+    required: false
+    default: "60000"
+  exclude-patterns:
+    description: "Comma-separated glob patterns to exclude from review (e.g. '*.test.js,docs/**')"
+    required: false
+    default: ""
+  pr-number:
+    description: "Pull Request number (auto-detected from event context; set manually for workflow_dispatch)"
+    required: false
+    default: ""
+  dry-run:
+    description: "If true, prints the review to logs without posting to GitHub. Default: false"
+    required: false
+    default: "false"
 
 runs:
   using: "docker"
@@ -45,3 +69,9 @@ runs:
     INPUT_MODE: ${{ inputs.mode }}
     INPUT_LANGUAGE: ${{ inputs.language }}
     INPUT_BASE_URL: ${{ inputs.base-url }}
+    INPUT_TEMPERATURE: ${{ inputs.temperature }}
+    INPUT_MAX_TOKENS: ${{ inputs.max-tokens }}
+    INPUT_MAX_DIFF_CHARS: ${{ inputs.max-diff-chars }}
+    INPUT_EXCLUDE_PATTERNS: ${{ inputs.exclude-patterns }}
+    INPUT_PR_NUMBER: ${{ inputs.pr-number }}
+    INPUT_DRY_RUN: ${{ inputs.dry-run }}
