@@ -317,24 +317,41 @@ Commit and push the file. Now, every time a Pull Request is opened or updated in
 
 ## What the Review Looks Like
 
-When SpicyDiff runs, it posts two types of comments on your PR:
+SpicyDiff posts **one single comment** on your PR with everything inside — overall summary, per-file breakdowns, and line-level comments. No scattered inline comments cluttering your code.
 
-### 1. Summary Comment (on the PR page)
-
-> ## SpicyDiff Review 🗑️
+> ## SpicyDiff Review 🔥
 >
 > **Mode**: 🌶️ 地狱厨房模式 (ROAST)
-> **Score**: 15/100 🗑️
+> **Score**: 35/100 🔥
 >
 > ---
 >
-> 这坨代码就像一碗放了三天的方便面——又糊又烂还发臭！变量命名像是蒙着眼在键盘上跳舞，嵌套深得像俄罗斯套娃，Magic Number 满天飞得像厨房里的苍蝇。我见过糟糕的代码，但这个让我想把显示器扔进油锅里！
-
-### 2. Inline Comments (on specific code lines)
-
-> 🌶️ **SpicyDiff**
+> 这坨代码就像一碗放了三天的方便面——又糊又烂还发臭！
 >
-> `x = 86400`? What is 86400? The number of times I want to slap whoever wrote this? USE A NAMED CONSTANT! This is the coding equivalent of unlabeled spice jars — nobody knows what's inside until it blows up!
+> ### 📂 文件审查详情
+>
+> <details>
+> <summary><b><code>src/utils.py</code></b> — 25/100 🗑️</summary>
+>
+> 这文件烂得像隔夜的剩饭！变量命名像蒙着眼在键盘上跳舞...
+>
+> **行级评论:**
+>
+> - **L10**: `x = 86400` — 86400 是什么？你奶奶的电话号码吗？用常量！
+> - **L23**: 嵌套 5 层 if？这不是代码，这是俄罗斯套娃！
+>
+> </details>
+>
+> <details>
+> <summary><b><code>src/api.py</code></b> — 50/100 😐</summary>
+>
+> 勉强能看，但错误处理像是用创可贴包骨折...
+>
+> **行级评论:**
+>
+> - **L45**: 裸 `except Exception` — 你是想把所有错误都吞了？
+>
+> </details>
 
 ---
 
@@ -446,6 +463,7 @@ For PRs with **4+ files**, SpicyDiff automatically switches to multi-file mode:
 1. Each file is reviewed **individually** with its own LLM call
 2. **Smart context** is extracted — the surrounding function/class body is included so the LLM understands the code, not just the diff
 3. After all files are reviewed, a **merge call** generates the final summary and score
+4. Everything is posted as **one single comment** — overall summary, per-file breakdowns (collapsible), and line-level comments all in one place
 
 This produces much better results than dumping the entire diff into one prompt, because the LLM can focus on each file's logic without losing context.
 
@@ -544,13 +562,13 @@ GitHub downloads SpicyDiff and builds its Docker container
 SpicyDiff reads the code changes (git diff) from your PR
        │
        ▼
-It sends the diff to the AI with a "roast" or "praise" personality prompt
+It sends the diff to the AI with a "roast", "praise", or "security" personality prompt
        │
        ▼
-The AI returns a JSON response with a score and line-by-line comments
+The AI returns a JSON response with a score and per-file reviews
        │
        ▼
-SpicyDiff posts the review as comments on your PR
+SpicyDiff posts one clean review comment on your PR
        │
        ▼
 Done! The container shuts down. Nothing stays running.
