@@ -1,0 +1,47 @@
+name: "SpicyDiff 🌶️"
+description: "LLM-powered code review with personality — ROAST or PRAISE your PRs! Supports OpenAI, DeepSeek, Qwen, Doubao, Gemini, and more."
+author: "SpicyDiff Team"
+
+branding:
+  icon: "message-circle"
+  color: "red"
+
+inputs:
+  github-token:
+    description: "GitHub token with pull-request write permission"
+    required: true
+  api-key:
+    description: "API key for the LLM provider"
+    required: true
+  provider:
+    description: "LLM provider shortcut: openai, deepseek, qwen, doubao, zhipu, moonshot, gemini, yi, baichuan, minimax"
+    required: false
+    default: ""
+  model:
+    description: "LLM model name (optional — each provider has a sensible default)"
+    required: false
+    default: ""
+  mode:
+    description: "Review personality — ROAST (brutally honest) or PRAISE (blindly optimistic)"
+    required: false
+    default: "ROAST"
+  language:
+    description: "Output language: zh (中文) or en (English)"
+    required: false
+    default: "en"
+  base-url:
+    description: "Custom base URL for any OpenAI-compatible API (overrides provider preset)"
+    required: false
+    default: ""
+
+runs:
+  using: "docker"
+  image: "Dockerfile"
+  env:
+    INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+    INPUT_API_KEY: ${{ inputs.api-key }}
+    INPUT_PROVIDER: ${{ inputs.provider }}
+    INPUT_MODEL: ${{ inputs.model }}
+    INPUT_MODE: ${{ inputs.mode }}
+    INPUT_LANGUAGE: ${{ inputs.language }}
+    INPUT_BASE_URL: ${{ inputs.base-url }}
