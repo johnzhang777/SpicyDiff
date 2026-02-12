@@ -1,5 +1,5 @@
 name: "SpicyDiff 🌶️"
-description: "LLM-powered code review with personality — ROAST or PRAISE your PRs! Supports OpenAI, DeepSeek, Qwen, Doubao, Gemini, and more."
+description: "LLM-powered code review with personality — ROAST or PRAISE your PRs! Supports OpenAI, DeepSeek, and more."
 author: "SpicyDiff Team"
 
 branding:
