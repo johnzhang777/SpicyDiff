@@ -9,7 +9,7 @@ from github import GithubException
 from github.PullRequest import PullRequest
 
 from .logger import log
-from .models import Language, Mode, ReviewResult
+from .models import FileReviewSummary, FullReviewResult, Language, Mode, ReviewResult
 
 # Hidden HTML marker to reliably identify SpicyDiff comments
 _MARKER = "<!-- spicydiff-review -->"
@@ -60,14 +60,48 @@ def _find_nearest_valid_line(target: int, valid_lines: Set[int], max_distance: i
     return best if best_dist <= max_distance else None
 
 
-def _build_summary_body(result: ReviewResult, mode: Mode, language: Language = Language.ZH) -> str:
-    """Build a Markdown summary comment body."""
+def _build_summary_body(result, mode: Mode, language: Language = Language.ZH) -> str:
+    """Build a Markdown summary comment body.
+
+    Accepts either a ReviewResult or FullReviewResult.  When a FullReviewResult
+    with per-file breakdowns is provided, a detailed table is rendered.
+    """
     emoji = _score_emoji(result.score)
     mode_label = _MODE_LABELS.get((mode, language), _MODE_LABELS[(mode, Language.EN)])
-    header = f"{_MARKER}\n## SpicyDiff Review {emoji}\n\n"
-    meta = f"**Mode**: {mode_label}  \n**Score**: {result.score}/100 {emoji}\n\n"
-    body = f"---\n\n{result.summary}\n"
-    return header + meta + body
+
+    parts = []
+    parts.append(f"{_MARKER}\n## SpicyDiff Review {emoji}\n")
+    parts.append(f"**Mode**: {mode_label}  ")
+    parts.append(f"**Score**: {result.score}/100 {emoji}\n")
+    parts.append("---\n")
+    parts.append(f"{result.summary}\n")
+
+    # Per-file breakdown (only for FullReviewResult from multi-file reviews)
+    file_summaries = getattr(result, "file_summaries", [])
+    if file_summaries:
+        file_header = "### 📂 文件审查详情" if language == Language.ZH else "### 📂 Per-file Review Details"
+        parts.append(f"\n{file_header}\n")
+
+        for fs in file_summaries:
+            file_emoji = _score_emoji(fs.score)
+            # Each file gets a collapsible section with its full review
+            parts.append(f"<details>")
+            parts.append(f"<summary><b><code>{fs.file_path}</code></b> — {fs.score}/100 {file_emoji} ({fs.comment_count} comments)</summary>")
+            parts.append(f"")
+            parts.append(f"{fs.summary}")
+            parts.append(f"")
+            parts.append(f"</details>")
+            parts.append(f"")
+
+    # Stats footer
+    review_count = len(result.reviews) if result.reviews else 0
+    if review_count > 0:
+        if language == Language.ZH:
+            parts.append(f"\n> 💬 共 {review_count} 条行级评论（详见 Files Changed 页面）")
+        else:
+            parts.append(f"\n> 💬 {review_count} inline comment(s) — see the Files Changed tab")
+
+    return "\n".join(parts)
 
 
 def post_summary_comment(

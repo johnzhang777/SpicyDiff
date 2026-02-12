@@ -125,28 +125,29 @@ def _single_pass_review(cfg, system_prompt: str, pr_diff: PRDiff) -> ReviewResul
     )
 
 
-def _multi_file_review(cfg, system_prompt: str, pr_diff: PRDiff, pr) -> ReviewResult:
+def _multi_file_review(cfg, system_prompt: str, pr_diff: PRDiff, pr):
     """Review each file individually, then merge results.
 
     For each file:
     1. Fetch the full file content (for smart context).
     2. Extract surrounding function/class bodies.
     3. Call LLM with per-file diff + context.
-    4. Collect all inline reviews.
+    4. Collect all inline reviews + per-file summaries.
 
     Finally, call LLM again to merge per-file summaries into a cohesive overall review.
+    Returns a FullReviewResult with per-file breakdowns.
     """
     from .context import extract_surrounding_context, fetch_file_content
     from .llm_client import call_llm
     from .logger import log
-    from .models import InlineReview, ReviewResult
+    from .models import FileReviewSummary, FullReviewResult, InlineReview
     from .prompts import build_file_review_prompt, build_merge_summary_prompt
 
     log.info("Using multi-file review (%d files).", len(pr_diff.files))
 
     all_reviews: List[InlineReview] = []
-    file_summaries: List[str] = []
-    scores: List[int] = []
+    file_review_summaries: List[FileReviewSummary] = []
+    file_summary_texts: List[str] = []
 
     for i, file_diff in enumerate(pr_diff.files, 1):
         log.info("::group::Reviewing file %d/%d: %s", i, len(pr_diff.files), file_diff.path)
@@ -182,15 +183,24 @@ def _multi_file_review(cfg, system_prompt: str, pr_diff: PRDiff, pr) -> ReviewRe
         )
 
         all_reviews.extend(file_result.reviews)
-        scores.append(file_result.score)
-        file_summaries.append(f"- **{file_diff.path}** (score: {file_result.score}): {file_result.summary}")
+
+        # Store per-file summary for the table
+        file_review_summaries.append(FileReviewSummary(
+            file_path=file_diff.path,
+            score=file_result.score,
+            summary=file_result.summary,
+            comment_count=len(file_result.reviews),
+        ))
+        file_summary_texts.append(
+            f"- **{file_diff.path}** (score: {file_result.score}): {file_result.summary}"
+        )
 
         log.info("  Score: %d/100 | Comments: %d", file_result.score, len(file_result.reviews))
         log.info("::endgroup::")
 
     # Merge: generate an overall summary from per-file results
-    log.info("Generating merged summary from %d file reviews...", len(file_summaries))
-    merge_prompt = build_merge_summary_prompt("\n".join(file_summaries), cfg.language)
+    log.info("Generating merged summary from %d file reviews...", len(file_summary_texts))
+    merge_prompt = build_merge_summary_prompt("\n".join(file_summary_texts), cfg.language)
 
     merge_result = call_llm(
         api_key=cfg.api_key,
@@ -202,10 +212,11 @@ def _multi_file_review(cfg, system_prompt: str, pr_diff: PRDiff, pr) -> ReviewRe
         max_tokens=1024,
     )
 
-    return ReviewResult(
+    return FullReviewResult(
         summary=merge_result.summary,
         score=merge_result.score,
         reviews=all_reviews,
+        file_summaries=file_review_summaries,
     )
 
 
