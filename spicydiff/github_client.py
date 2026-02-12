@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set
 
 from github import GithubException
 from github.PullRequest import PullRequest
@@ -39,6 +39,25 @@ def _score_emoji(score: int) -> str:
         if score in rng:
             return emoji
     return ""
+
+
+def _find_nearest_valid_line(target: int, valid_lines: Set[int], max_distance: int = 5) -> Optional[int]:
+    """Find the nearest valid line number within max_distance of the target.
+
+    The LLM sometimes returns a line number from the full file context
+    rather than the exact added/changed line.  This finds the closest
+    line that is actually in the diff so we can still post the comment.
+    """
+    if not valid_lines:
+        return None
+    best = None
+    best_dist = max_distance + 1
+    for line in valid_lines:
+        dist = abs(line - target)
+        if dist < best_dist:
+            best_dist = dist
+            best = line
+    return best if best_dist <= max_distance else None
 
 
 def _build_summary_body(result: ReviewResult, mode: Mode, language: Language = Language.ZH) -> str:
@@ -81,8 +100,15 @@ def post_inline_comments(
 ) -> None:
     """Post inline review comments on the specific diff lines.
 
-    GitHub's ``create_review`` API is used to batch all comments into a single
-    review so we don't flood the PR with individual comment notifications.
+    Strategy:
+    1. Try to post via the ``create_review`` API (batched, one notification).
+    2. If that fails with 403 (permission denied), fall back to posting
+       individual issue comments with file/line references.
+
+    Line matching:
+    - If the LLM returns a line not in the diff, try to find the nearest
+      valid line within 5 lines (LLM often returns context line numbers).
+    - If no nearby valid line exists, skip the comment.
     """
     if not result.reviews:
         log.info("No inline reviews to post.")
@@ -94,21 +120,32 @@ def post_inline_comments(
         log.warning("No commits found in the PR; skipping inline comments.")
         return
 
+    # Build payload with line-number correction
     comments_payload: List[dict] = []
     for review in result.reviews:
         file_lines = changed_lines.get(review.file_path, set())
-        # Only post if the line is actually part of the diff (GitHub API requirement)
-        if review.line_number not in file_lines:
-            log.warning(
-                "Skipping comment on %s:%d (line not in diff).",
-                review.file_path,
-                review.line_number,
-            )
-            continue
+        target_line = review.line_number
+
+        if target_line not in file_lines:
+            # Try to snap to the nearest valid line
+            nearest = _find_nearest_valid_line(target_line, file_lines)
+            if nearest is not None:
+                log.info(
+                    "Snapped comment on %s:%d -> %d (nearest valid line).",
+                    review.file_path, target_line, nearest,
+                )
+                target_line = nearest
+            else:
+                log.warning(
+                    "Skipping comment on %s:%d (no valid line within range).",
+                    review.file_path, review.line_number,
+                )
+                continue
+
         comments_payload.append(
             {
                 "path": review.file_path,
-                "line": review.line_number,
+                "line": target_line,
                 "body": f"🌶️ **SpicyDiff**\n\n{review.comment}",
             }
         )
@@ -117,22 +154,60 @@ def post_inline_comments(
         log.info("All inline comments fell outside the diff; nothing to post.")
         return
 
-    def _do_review():
+    # Try the review API first (preferred — batched, single notification)
+    try:
         pr.create_review(
             commit=commits[-1],
             body="",
             event="COMMENT",
             comments=comments_payload,
         )
+        log.info("Posted %d inline review comment(s) via review API.", len(comments_payload))
+        return
+    except GithubException as exc:
+        if exc.status == 403:
+            log.warning(
+                "Review API returned 403 (insufficient permissions). "
+                "Falling back to individual issue comments."
+            )
+        elif exc.status == 422:
+            log.warning(
+                "Review API returned 422 (validation error, likely bad line numbers). "
+                "Falling back to individual issue comments."
+            )
+        else:
+            log.warning("Review API failed (%d). Falling back to issue comments.", exc.status)
 
-    _retry_github_call(_do_review)
-    log.info("Posted %d inline review comment(s).", len(comments_payload))
+    # Fallback: post as individual issue comments
+    posted = 0
+    for comment_data in comments_payload:
+        body = (
+            f"**{comment_data['path']}** (line {comment_data['line']})\n\n"
+            f"{comment_data['body']}"
+        )
+        try:
+            _retry_github_call(lambda b=body: pr.create_issue_comment(b))
+            posted += 1
+        except GithubException as exc:
+            log.warning(
+                "Failed to post comment on %s:%d — %s",
+                comment_data["path"], comment_data["line"], exc,
+            )
+        # Avoid flooding: cap at 10 individual comments
+        if posted >= 10:
+            remaining = len(comments_payload) - posted
+            if remaining > 0:
+                log.info("Capped at 10 individual comments. %d more skipped.", remaining)
+            break
+
+    log.info("Posted %d inline comment(s) as issue comments (fallback).", posted)
 
 
 def _retry_github_call(func, max_retries: int = 3) -> None:
     """Execute a GitHub API call with retries and exponential backoff.
 
-    Handles rate-limiting (403/429) and server errors (5xx).
+    Only retries on rate-limiting (429) and server errors (5xx).
+    403 (permission denied) is NOT retried — it's a permanent error.
     """
     for attempt in range(max_retries):
         try:
@@ -140,7 +215,7 @@ def _retry_github_call(func, max_retries: int = 3) -> None:
             return
         except GithubException as exc:
             status = exc.status
-            if status in (403, 429) or status >= 500:
+            if status == 429 or status >= 500:
                 wait = 2 ** attempt  # 1s, 2s, 4s
                 log.warning(
                     "GitHub API error %d (attempt %d/%d). Retrying in %ds...",
@@ -148,6 +223,6 @@ def _retry_github_call(func, max_retries: int = 3) -> None:
                 )
                 time.sleep(wait)
             else:
-                raise  # non-retryable error
+                raise  # non-retryable (including 403)
     # Final attempt — let it raise
     func()
