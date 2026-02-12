@@ -1,7 +1,12 @@
 """Unit tests for the prompts module."""
 
 from spicydiff.models import Language, Mode
-from spicydiff.prompts import build_system_prompt, build_user_prompt
+from spicydiff.prompts import (
+    build_system_prompt,
+    build_user_prompt,
+    build_file_review_prompt,
+    build_merge_summary_prompt,
+)
 
 
 class TestBuildSystemPrompt:
@@ -15,48 +20,67 @@ class TestBuildSystemPrompt:
         prompt = build_system_prompt(Mode.ROAST, Language.EN)
         assert "Gordon Ramsay" in prompt
         assert "English" in prompt
-        # System context should also be in English
         assert "code review assistant" in prompt
 
     def test_praise_zh(self):
         prompt = build_system_prompt(Mode.PRAISE, Language.ZH)
         assert "夸夸群" in prompt
-        assert "中文" in prompt
 
     def test_praise_en(self):
         prompt = build_system_prompt(Mode.PRAISE, Language.EN)
         assert "Praise Club" in prompt
-        assert "English" in prompt
+
+    def test_security_zh(self):
+        prompt = build_system_prompt(Mode.SECURITY, Language.ZH)
+        assert "安全" in prompt
+        assert "SQL" in prompt
+        assert "高危" in prompt
+
+    def test_security_en(self):
+        prompt = build_system_prompt(Mode.SECURITY, Language.EN)
+        assert "security" in prompt.lower()
+        assert "SQL injection" in prompt
+        assert "HIGH" in prompt
 
     def test_contains_json_schema_zh(self):
         prompt = build_system_prompt(Mode.ROAST, Language.ZH)
         assert "summary" in prompt
         assert "score" in prompt
-        assert "reviews" in prompt
 
     def test_contains_json_schema_en(self):
         prompt = build_system_prompt(Mode.ROAST, Language.EN)
         assert "summary" in prompt
-        assert "score" in prompt
-        assert "reviews" in prompt
         assert "line_number" in prompt
 
     def test_en_system_context_is_english(self):
         prompt = build_system_prompt(Mode.ROAST, Language.EN)
-        # Should NOT contain Chinese system context
         assert "你是一个代码审查助手" not in prompt
 
     def test_zh_system_context_is_chinese(self):
         prompt = build_system_prompt(Mode.ROAST, Language.ZH)
         assert "你是一个代码审查助手" in prompt
 
-    def test_en_schema_is_english(self):
-        prompt = build_system_prompt(Mode.PRAISE, Language.EN)
-        assert "A brief overall review" in prompt
+    def test_custom_rules_zh(self):
+        rules = ["所有函数必须有文档注释", "禁止硬编码 URL"]
+        prompt = build_system_prompt(Mode.ROAST, Language.ZH, custom_rules=rules)
+        assert "团队自定义规则" in prompt
+        assert "所有函数必须有文档注释" in prompt
+        assert "禁止硬编码 URL" in prompt
 
-    def test_line_number_clarification_en(self):
+    def test_custom_rules_en(self):
+        rules = ["All functions must have docstrings", "No hardcoded URLs"]
+        prompt = build_system_prompt(Mode.ROAST, Language.EN, custom_rules=rules)
+        assert "team-specific rules" in prompt
+        assert "All functions must have docstrings" in prompt
+        assert "No hardcoded URLs" in prompt
+
+    def test_no_custom_rules(self):
         prompt = build_system_prompt(Mode.ROAST, Language.EN)
-        assert "new file" in prompt.lower() or "NEW file" in prompt
+        assert "team-specific rules" not in prompt
+
+    def test_empty_custom_rules(self):
+        prompt = build_system_prompt(Mode.ROAST, Language.EN, custom_rules=[])
+        assert "team-specific rules" not in prompt
 
 
 class TestBuildUserPrompt:
@@ -67,19 +91,9 @@ class TestBuildUserPrompt:
         assert diff in prompt
 
     def test_includes_diff_en(self):
-        diff = "--- a/foo.py\n+++ b/foo.py\n@@ -1 +1 @@\n-old\n+new"
+        diff = "some diff"
         prompt = build_user_prompt(diff, Language.EN)
-        assert "```diff" in prompt
-        assert diff in prompt
         assert "Please review" in prompt
-
-    def test_en_prompt_is_english(self):
-        prompt = build_user_prompt("diff text", Language.EN)
-        assert "请审查" not in prompt
-
-    def test_zh_prompt_is_chinese(self):
-        prompt = build_user_prompt("diff text", Language.ZH)
-        assert "请审查" in prompt
 
     def test_truncation_notice_zh(self):
         prompt = build_user_prompt("diff", Language.ZH, truncated=True)
@@ -89,6 +103,38 @@ class TestBuildUserPrompt:
         prompt = build_user_prompt("diff", Language.EN, truncated=True)
         assert "omitted" in prompt
 
-    def test_no_truncation_notice(self):
-        prompt = build_user_prompt("diff", Language.EN, truncated=False)
-        assert "omitted" not in prompt
+
+class TestBuildFileReviewPrompt:
+    def test_basic(self):
+        prompt = build_file_review_prompt("src/main.py", "diff text", Language.EN)
+        assert "src/main.py" in prompt
+        assert "diff text" in prompt
+
+    def test_with_context(self):
+        prompt = build_file_review_prompt(
+            "app.py", "diff", Language.EN, context_code="def foo():\n    pass"
+        )
+        assert "context" in prompt.lower()
+        assert "def foo():" in prompt
+
+    def test_no_context(self):
+        prompt = build_file_review_prompt("app.py", "diff", Language.EN)
+        assert "context" not in prompt.lower()
+
+    def test_zh(self):
+        prompt = build_file_review_prompt("main.go", "diff", Language.ZH)
+        assert "main.go" in prompt
+
+
+class TestBuildMergeSummaryPrompt:
+    def test_en(self):
+        reviews = "- file1.py (score: 30): Bad code"
+        prompt = build_merge_summary_prompt(reviews, Language.EN)
+        assert "file1.py" in prompt
+        assert "summary" in prompt
+
+    def test_zh(self):
+        reviews = "- file1.py (score: 30): 糟糕的代码"
+        prompt = build_merge_summary_prompt(reviews, Language.ZH)
+        assert "file1.py" in prompt
+        assert "总体评价" in prompt

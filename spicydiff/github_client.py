@@ -29,6 +29,8 @@ _MODE_LABELS = {
     (Mode.ROAST, Language.EN): "🌶️ Hell's Kitchen Mode (ROAST)",
     (Mode.PRAISE, Language.ZH): "🌈 夸夸群模式 (PRAISE)",
     (Mode.PRAISE, Language.EN): "🌈 Praise Mode (PRAISE)",
+    (Mode.SECURITY, Language.ZH): "🔒 安全审计模式 (SECURITY)",
+    (Mode.SECURITY, Language.EN): "🔒 Security Audit Mode (SECURITY)",
 }
 
 

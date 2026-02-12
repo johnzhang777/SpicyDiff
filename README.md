@@ -8,6 +8,7 @@ SpicyDiff is a [GitHub Action](https://docs.github.com/en/actions). When someone
 |------|-------------|-------------|
 | **ROAST** 🔥 | Gordon Ramsay-style senior architect | Roasts your code with kitchen metaphors. "This function is RAW!" |
 | **PRAISE** 🌈 | Overly enthusiastic junior dev | Worships your code with emoji. "This for-loop is GENIUS! 🚀✨💖" |
+| **SECURITY** 🔒 | Paranoid security auditor | Hunts for vulnerabilities: SQL injection, XSS, hardcoded secrets, etc. |
 
 ---
 
@@ -69,7 +70,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: johnzhang777/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -101,7 +102,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: johnzhang777/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -133,7 +134,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: john zhang/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -165,7 +166,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: johnzhang777/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -197,7 +198,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: johnzhang777/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -229,7 +230,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: johnzhang777/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -262,7 +263,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: johnzhang777/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -296,7 +297,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: johnzhang777/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -345,7 +346,7 @@ When SpicyDiff runs, it posts two types of comments on your PR:
 | `api-key` | **Yes** | — | Your LLM provider's API key (saved as a GitHub Secret) |
 | `provider` | No | `openai` | Provider shortcut (see table below) |
 | `model` | No | *(auto)* | Override the default model. Each provider has a sensible default |
-| `mode` | No | `ROAST` | `ROAST` = brutal critic, `PRAISE` = blind fan |
+| `mode` | No | `ROAST` | `ROAST` = brutal critic, `PRAISE` = blind fan, `SECURITY` = paranoid auditor |
 | `language` | No | `en` | `zh` = Chinese output, `en` = English output |
 | `base-url` | No | *(auto)* | Custom API URL. If set, overrides `provider` |
 | `temperature` | No | `0.7` | LLM sampling temperature (0.0 = deterministic, 1.0 = creative) |
@@ -353,6 +354,7 @@ When SpicyDiff runs, it posts two types of comments on your PR:
 | `max-diff-chars` | No | `60000` | Maximum diff size (chars) sent to the LLM. Larger diffs are automatically truncated |
 | `exclude-patterns` | No | — | Comma-separated glob patterns to skip (e.g. `"*.test.js,docs/**"`) |
 | `pr-number` | No | *(auto)* | PR number (auto-detected; set manually for `workflow_dispatch`) |
+| `custom-rules` | No | — | Comma-separated custom rules to enforce (e.g. `"No hardcoded URLs,All functions must have docstrings"`) |
 | `dry-run` | No | `false` | If `true`, prints review to Action logs without posting to GitHub |
 
 ### Provider Shortcuts
@@ -376,6 +378,81 @@ Instead of remembering API URLs, just set `provider` to one of these:
 
 ---
 
+## Project Config File (`.spicydiff.yml`)
+
+Instead of passing everything via the workflow YAML, you can commit a `.spicydiff.yml` file in your repo root. This is especially useful for **custom rules** that your whole team should follow.
+
+```yaml
+# .spicydiff.yml (in your repo root)
+mode: ROAST
+language: zh
+
+# Team coding standards — the LLM will enforce these
+rules:
+  - All functions must have docstrings
+  - No hardcoded URLs or IP addresses
+  - Use snake_case for Python variables
+  - API endpoints must have error handling
+  - No TODO comments in production code
+
+# Files to skip
+exclude:
+  - "*.test.js"
+  - "*.spec.ts"
+  - "docs/**"
+  - "migrations/**"
+
+# Optional tuning
+temperature: 0.5
+max-tokens: 4096
+```
+
+**Priority:** Action inputs (from YAML workflow) always override `.spicydiff.yml`. The config file provides team defaults.
+
+Supported filenames: `.spicydiff.yml`, `.spicydiff.yaml`, `spicydiff.yml`, `spicydiff.yaml`.
+
+---
+
+## Security Review Mode
+
+Set `mode: "SECURITY"` for a dedicated security audit. The LLM acts as a paranoid security auditor looking for:
+
+- **Injection attacks**: SQL injection, XSS, SSRF, CSRF
+- **Hardcoded secrets**: API keys, tokens, passwords
+- **Unsafe deserialization**, weak random number generation
+- **Missing input validation**, missing authorization checks
+- **Path traversal**, file inclusion vulnerabilities
+- **Information leakage**: passwords in logs, stack traces in responses
+
+Each finding is tagged with severity: 🔴 HIGH / 🟡 MEDIUM / 🟢 LOW.
+
+```yaml
+- name: Security Review
+  uses: johnzhang777/spicydiff@v1
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    api-key: ${{ secrets.LLM_API_KEY }}
+    provider: "deepseek"
+    mode: "SECURITY"
+    language: "en"
+```
+
+---
+
+## Smart Multi-file Review
+
+For PRs with **4+ files**, SpicyDiff automatically switches to multi-file mode:
+
+1. Each file is reviewed **individually** with its own LLM call
+2. **Smart context** is extracted — the surrounding function/class body is included so the LLM understands the code, not just the diff
+3. After all files are reviewed, a **merge call** generates the final summary and score
+
+This produces much better results than dumping the entire diff into one prompt, because the LLM can focus on each file's logic without losing context.
+
+For small PRs (1-3 files), a single-pass review is used instead (faster and cheaper).
+
+---
+
 ## FAQ
 
 ### Do I need to install anything?
@@ -384,7 +461,7 @@ Instead of remembering API URLs, just set `provider` to one of these:
 
 ### Do I need to clone / fork the SpicyDiff repository?
 
-**No.** The line `uses: your-name/spicydiff@v1` in the YAML file tells GitHub to fetch it automatically.
+**No.** The line `uses: johnzhang777/spicydiff@v1` in the YAML file tells GitHub to fetch it automatically.
 
 ### What is `GITHUB_TOKEN`? Do I need to create it?
 
@@ -493,7 +570,7 @@ If you want to contribute to SpicyDiff itself:
 ### Setup
 
 ```bash
-git clone https://github.com/your-name/spicydiff.git
+git clone https://github.com/johnzhang777/spicydiff.git
 cd spicydiff
 pip install -r requirements.txt
 ```
@@ -517,16 +594,18 @@ SpicyDiff/
 ├── spicydiff/
 │   ├── __init__.py
 │   ├── __main__.py         # python -m spicydiff entry point
-│   ├── main.py             # Pipeline orchestrator (with dry-run support)
-│   ├── config.py           # Reads all configuration from environment
+│   ├── main.py             # Pipeline orchestrator (single-pass + multi-file)
+│   ├── config.py           # Env config + .spicydiff.yml merge
 │   ├── models.py           # Data models (Pydantic)
 │   ├── providers.py        # LLM provider presets (10 built-in providers)
-│   ├── prompts.py          # ROAST / PRAISE prompt templates (zh + en)
+│   ├── prompts.py          # ROAST / PRAISE / SECURITY prompt templates
 │   ├── llm_client.py       # LLM API with retry, timeout, fence stripping
 │   ├── diff_parser.py      # PR diff with size limits + custom excludes
 │   ├── github_client.py    # GitHub comments with retry + i18n labels
+│   ├── context.py          # Smart context: extract surrounding code blocks
+│   ├── repo_config.py      # .spicydiff.yml loader
 │   └── logger.py           # Structured logging with GitHub Actions annotations
-└── tests/                  # 106 unit tests
+└── tests/                  # 142 unit tests
 ```
 
 ---

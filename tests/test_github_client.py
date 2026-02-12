@@ -64,3 +64,14 @@ class TestBuildSummaryBody:
     def test_marker_is_hidden_html_comment(self):
         assert _MARKER.startswith("<!--")
         assert _MARKER.endswith("-->")
+
+    def test_security_mode_zh(self):
+        result = ReviewResult(summary="SQL injection found!", score=20, reviews=[])
+        body = _build_summary_body(result, Mode.SECURITY, Language.ZH)
+        assert "安全审计" in body
+        assert "SECURITY" in body
+
+    def test_security_mode_en(self):
+        result = ReviewResult(summary="XSS detected!", score=15, reviews=[])
+        body = _build_summary_body(result, Mode.SECURITY, Language.EN)
+        assert "Security Audit" in body
