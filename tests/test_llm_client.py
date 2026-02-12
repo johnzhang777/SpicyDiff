@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from spicydiff.llm_client import call_llm
+from spicydiff.llm_client import call_llm, _strip_code_fences
 from spicydiff.models import ReviewResult
 
 
@@ -70,7 +70,6 @@ class TestCallLLM:
 
     @patch("spicydiff.llm_client.OpenAI")
     def test_schema_validation_failure_exits(self, mock_openai_cls):
-        # Valid JSON but invalid schema (score > 100)
         payload = {"summary": "Hi", "score": 999, "reviews": []}
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value = _mock_response(json.dumps(payload))
@@ -78,3 +77,66 @@ class TestCallLLM:
 
         with pytest.raises(SystemExit):
             call_llm("key", "gpt-4o", "sys", "usr")
+
+    @patch("spicydiff.llm_client.OpenAI")
+    def test_api_exception_exits(self, mock_openai_cls):
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = Exception("Connection refused")
+        mock_openai_cls.return_value = mock_client
+
+        with pytest.raises(SystemExit):
+            call_llm("key", "gpt-4o", "sys", "usr")
+
+    @patch("spicydiff.llm_client.OpenAI")
+    def test_passes_retry_and_timeout(self, mock_openai_cls):
+        """Verify that max_retries and timeout are passed to the OpenAI client."""
+        payload = {"summary": "OK", "score": 50, "reviews": []}
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = _mock_response(json.dumps(payload))
+        mock_openai_cls.return_value = mock_client
+
+        call_llm("key", "gpt-4o", "sys", "usr", max_retries=5, timeout=60)
+
+        # Check the OpenAI constructor was called with retry/timeout args
+        mock_openai_cls.assert_called_once_with(
+            api_key="key",
+            base_url="https://api.openai.com/v1",
+            max_retries=5,
+            timeout=60,
+        )
+
+    @patch("spicydiff.llm_client.OpenAI")
+    def test_passes_temperature_and_max_tokens(self, mock_openai_cls):
+        payload = {"summary": "OK", "score": 50, "reviews": []}
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = _mock_response(json.dumps(payload))
+        mock_openai_cls.return_value = mock_client
+
+        call_llm("key", "gpt-4o", "sys", "usr", temperature=0.3, max_tokens=2048)
+
+        call_args = mock_client.chat.completions.create.call_args
+        assert call_args.kwargs["temperature"] == 0.3
+        assert call_args.kwargs["max_tokens"] == 2048
+
+
+class TestStripCodeFences:
+    def test_json_fence(self):
+        assert _strip_code_fences("```json\n{}\n```") == "{}"
+
+    def test_plain_fence(self):
+        assert _strip_code_fences("```\n{}\n```") == "{}"
+
+    def test_no_fence(self):
+        assert _strip_code_fences('{"a": 1}') == '{"a": 1}'
+
+    def test_whitespace(self):
+        assert _strip_code_fences("  ```json\n{}\n```  ") == "{}"
+
+    def test_only_opening_fence(self):
+        result = _strip_code_fences("```json\n{}")
+        assert result == "{}"
+
+    def test_nested_backticks_in_content(self):
+        content = '```json\n{"code": "use `x`"}\n```'
+        result = _strip_code_fences(content)
+        assert '"code"' in result

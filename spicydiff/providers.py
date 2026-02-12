@@ -1,13 +1,13 @@
 """Built-in LLM provider presets.
 
 Users can either pick a provider shortcut (e.g. provider: "deepseek") or
-manually specify openai-base-url + model for any OpenAI-compatible service.
+manually specify base-url + model for any OpenAI-compatible service.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -18,6 +18,7 @@ class ProviderPreset:
     base_url: str
     default_model: str
     description: str
+    openai_compatible: bool = True  # False = may need an adapter
 
 
 # ---------------------------------------------------------------------------
@@ -85,20 +86,20 @@ PROVIDERS: Dict[str, ProviderPreset] = {
         default_model="gemini-2.0-flash",
         description="Google Gemini models via OpenAI-compatible endpoint (gemini-2.0-flash, gemini-1.5-pro, etc.)",
     ),
-    "claude": ProviderPreset(
-        name="Anthropic Claude",
-        base_url="https://api.anthropic.com/v1",
-        default_model="claude-sonnet-4-20250514",
-        description="Anthropic Claude models (requires anthropic-compatible proxy or adapter)",
-    ),
 }
+
+# NOTE: Anthropic Claude is intentionally excluded.
+# The Anthropic API (api.anthropic.com) is NOT OpenAI-compatible —
+# it uses a different request/response format.  Users who want Claude
+# should use a third-party OpenAI-compatible proxy (e.g. LiteLLM, one-api)
+# and configure it via the `base-url` input.
 
 
 def resolve_provider(
     provider: Optional[str],
     base_url: Optional[str],
     model: Optional[str],
-) -> tuple[str, str]:
+) -> Tuple[str, str]:
     """Resolve the final (base_url, model) from user inputs.
 
     Priority:
@@ -123,7 +124,7 @@ def resolve_provider(
             raise ValueError(
                 f"Unknown provider '{provider}'. "
                 f"Available providers: {available}. "
-                f"Or set openai-base-url manually for custom endpoints."
+                f"Or set base-url manually for custom endpoints."
             )
         return preset.base_url, model or preset.default_model
 

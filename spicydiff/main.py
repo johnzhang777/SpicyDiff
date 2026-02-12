@@ -23,6 +23,7 @@ def _resolve_pr_number() -> None:
         if pr_number:
             os.environ["PR_NUMBER"] = str(pr_number)
     except Exception as exc:
+        # Can't use logger here yet — config not loaded
         print(f"::warning::Failed to read GITHUB_EVENT_PATH: {exc}")
 
 
@@ -36,26 +37,42 @@ def run() -> None:
     from .diff_parser import fetch_pr_diff, get_pr
     from .github_client import post_inline_comments, post_summary_comment
     from .llm_client import call_llm
+    from .logger import log
     from .prompts import build_system_prompt, build_user_prompt
 
     # Step 1: Load configuration
     cfg = Config.from_env()
     provider_info = f"provider={cfg.provider}" if cfg.provider else f"base_url={cfg.base_url}"
-    print(f"SpicyDiff 🌶️  | mode={cfg.mode.value} | lang={cfg.language.value} | model={cfg.model} | {provider_info}")
+    log.info(
+        "SpicyDiff 🌶️  | mode=%s | lang=%s | model=%s | %s | temp=%.1f | max_tokens=%d%s",
+        cfg.mode.value, cfg.language.value, cfg.model, provider_info,
+        cfg.temperature, cfg.max_tokens,
+        " | DRY RUN" if cfg.dry_run else "",
+    )
 
     # Step 2: Fetch and parse the PR diff
+    log.info("Fetching PR #%d diff from %s...", cfg.pr_number, cfg.github_repository)
     pr = get_pr(cfg.github_token, cfg.github_repository, cfg.pr_number)
-    pr_diff = fetch_pr_diff(pr)
+    pr_diff = fetch_pr_diff(
+        pr,
+        exclude_patterns=cfg.exclude_patterns or None,
+        max_diff_chars=cfg.max_diff_chars,
+    )
 
     if not pr_diff.files:
-        print("No reviewable files found in the PR diff. Exiting.")
+        log.info("No reviewable files found in the PR diff. Exiting.")
         return
 
-    print(f"Found {len(pr_diff.files)} file(s) to review.")
+    log.info(
+        "Found %d file(s) to review (%d chars).%s",
+        len(pr_diff.files),
+        pr_diff.total_chars,
+        " (diff truncated)" if pr_diff.truncated else "",
+    )
 
     # Step 3: Build prompts
     system_prompt = build_system_prompt(cfg.mode, cfg.language)
-    user_prompt = build_user_prompt(pr_diff.full_diff_text)
+    user_prompt = build_user_prompt(pr_diff.full_diff_text, cfg.language, pr_diff.truncated)
 
     # Step 4: Call LLM
     result = call_llm(
@@ -64,15 +81,25 @@ def run() -> None:
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         base_url=cfg.base_url,
+        temperature=cfg.temperature,
+        max_tokens=cfg.max_tokens,
     )
 
-    print(f"LLM Score: {result.score}/100 | Inline reviews: {len(result.reviews)}")
+    log.info("LLM Score: %d/100 | Inline reviews: %d", result.score, len(result.reviews))
 
-    # Step 5: Post results to GitHub
-    post_summary_comment(pr, result, cfg.mode)
-    post_inline_comments(pr, result, pr_diff.changed_line_map)
-
-    print("SpicyDiff review complete! 🌶️")
+    # Step 5: Post results to GitHub (or just log in dry-run mode)
+    if cfg.dry_run:
+        log.info("::group::Dry-run output (not posted to GitHub)")
+        log.info("Summary: %s", result.summary)
+        log.info("Score: %d/100", result.score)
+        for r in result.reviews:
+            log.info("  [%s:%d] %s", r.file_path, r.line_number, r.comment)
+        log.info("::endgroup::")
+        log.info("Dry-run complete. No comments were posted.")
+    else:
+        post_summary_comment(pr, result, cfg.mode, cfg.language)
+        post_inline_comments(pr, result, pr_diff.changed_line_map)
+        log.info("SpicyDiff review complete! 🌶️")
 
 
 def main() -> None:
