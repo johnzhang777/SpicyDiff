@@ -61,45 +61,60 @@ def _find_nearest_valid_line(target: int, valid_lines: Set[int], max_distance: i
 
 
 def _build_summary_body(result, mode: Mode, language: Language = Language.ZH) -> str:
-    """Build a Markdown summary comment body.
+    """Build a single Markdown comment that contains the entire review.
 
-    Accepts either a ReviewResult or FullReviewResult.  When a FullReviewResult
-    with per-file breakdowns is provided, a detailed table is rendered.
+    For multi-file reviews (FullReviewResult), each file gets its own
+    collapsible section with the LLM summary AND all line-level comments
+    embedded inside — so everything lives in one clean card.
     """
     emoji = _score_emoji(result.score)
     mode_label = _MODE_LABELS.get((mode, language), _MODE_LABELS[(mode, Language.EN)])
 
-    parts = []
+    parts: List[str] = []
     parts.append(f"{_MARKER}\n## SpicyDiff Review {emoji}\n")
     parts.append(f"**Mode**: {mode_label}  ")
     parts.append(f"**Score**: {result.score}/100 {emoji}\n")
     parts.append("---\n")
     parts.append(f"{result.summary}\n")
 
-    # Per-file breakdown (only for FullReviewResult from multi-file reviews)
+    # --- Multi-file: per-file collapsible sections ---
     file_summaries = getattr(result, "file_summaries", [])
     if file_summaries:
         file_header = "### 📂 文件审查详情" if language == Language.ZH else "### 📂 Per-file Review Details"
         parts.append(f"\n{file_header}\n")
 
+        # Group inline reviews by file for embedding
+        reviews_by_file: Dict[str, List] = {}
+        for r in (result.reviews or []):
+            reviews_by_file.setdefault(r.file_path, []).append(r)
+
         for fs in file_summaries:
             file_emoji = _score_emoji(fs.score)
-            # Each file gets a collapsible section with its full review
             parts.append(f"<details>")
-            parts.append(f"<summary><b><code>{fs.file_path}</code></b> — {fs.score}/100 {file_emoji} ({fs.comment_count} comments)</summary>")
-            parts.append(f"")
-            parts.append(f"{fs.summary}")
-            parts.append(f"")
-            parts.append(f"</details>")
-            parts.append(f"")
+            parts.append(
+                f"<summary><b><code>{fs.file_path}</code></b>"
+                f" — {fs.score}/100 {file_emoji}</summary>"
+            )
+            parts.append(f"\n{fs.summary}\n")
 
-    # Stats footer
-    review_count = len(result.reviews) if result.reviews else 0
-    if review_count > 0:
-        if language == Language.ZH:
-            parts.append(f"\n> 💬 共 {review_count} 条行级评论（详见 Files Changed 页面）")
-        else:
-            parts.append(f"\n> 💬 {review_count} inline comment(s) — see the Files Changed tab")
+            # Embed line-level comments for this file
+            file_reviews = reviews_by_file.get(fs.file_path, [])
+            if file_reviews:
+                line_label = "行级评论" if language == Language.ZH else "Line Comments"
+                parts.append(f"**{line_label}:**\n")
+                for r in file_reviews:
+                    parts.append(f"- **L{r.line_number}**: {r.comment}")
+                parts.append("")
+
+            parts.append(f"</details>\n")
+
+    # --- Single-pass: embed inline reviews as a list ---
+    elif result.reviews:
+        review_header = "### 💬 行级评论" if language == Language.ZH else "### 💬 Line-level Comments"
+        parts.append(f"\n{review_header}\n")
+        for r in result.reviews:
+            parts.append(f"- **`{r.file_path}` L{r.line_number}**: {r.comment}")
+        parts.append("")
 
     return "\n".join(parts)
 

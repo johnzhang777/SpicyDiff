@@ -96,12 +96,11 @@ def run() -> None:
 
     log.info("LLM Score: %d/100 | Inline reviews: %d", result.score, len(result.reviews))
 
-    # Step 5: Post results
+    # Step 5: Post results — everything goes into one summary comment
     if cfg.dry_run:
         _print_dry_run(log, result)
     else:
         post_summary_comment(pr, result, cfg.mode, cfg.language)
-        post_inline_comments(pr, result, pr_diff.changed_line_map)
         log.info("SpicyDiff review complete! 🌶️")
 
 
