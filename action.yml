@@ -22,7 +22,7 @@ inputs:
     required: false
     default: ""
   mode:
-    description: "Review personality — ROAST (brutally honest) or PRAISE (blindly optimistic)"
+    description: "Review personality — ROAST (brutally honest), PRAISE (blindly optimistic), or SECURITY (paranoid auditor)"
     required: false
     default: "ROAST"
   language:
@@ -53,6 +53,10 @@ inputs:
     description: "Pull Request number (auto-detected from event context; set manually for workflow_dispatch)"
     required: false
     default: ""
+  custom-rules:
+    description: "Comma-separated custom review rules to enforce (e.g. 'No hardcoded URLs,All functions must have docstrings')"
+    required: false
+    default: ""
   dry-run:
     description: "If true, prints the review to logs without posting to GitHub. Default: false"
     required: false
@@ -74,4 +78,5 @@ runs:
     INPUT_MAX_DIFF_CHARS: ${{ inputs.max-diff-chars }}
     INPUT_EXCLUDE_PATTERNS: ${{ inputs.exclude-patterns }}
     INPUT_PR_NUMBER: ${{ inputs.pr-number }}
+    INPUT_CUSTOM_RULES: ${{ inputs.custom-rules }}
     INPUT_DRY_RUN: ${{ inputs.dry-run }}

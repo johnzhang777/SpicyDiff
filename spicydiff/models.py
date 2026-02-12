@@ -13,6 +13,7 @@ class Mode(str, Enum):
 
     ROAST = "ROAST"
     PRAISE = "PRAISE"
+    SECURITY = "SECURITY"
 
 
 class Language(str, Enum):

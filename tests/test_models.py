@@ -13,6 +13,9 @@ class TestMode:
     def test_praise(self):
         assert Mode("PRAISE") == Mode.PRAISE
 
+    def test_security(self):
+        assert Mode("SECURITY") == Mode.SECURITY
+
     def test_invalid(self):
         with pytest.raises(ValueError):
             Mode("INVALID")
