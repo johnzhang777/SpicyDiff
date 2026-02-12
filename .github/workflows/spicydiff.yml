@@ -19,6 +19,6 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
-          provider: "gemini"
+          provider: "deepseek"
           mode: "ROAST"
           language: "zh"

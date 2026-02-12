@@ -70,7 +70,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: johnzhang777/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -102,7 +102,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: johnzhang777/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -134,7 +134,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: john zhang/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -166,7 +166,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: johnzhang777/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -198,7 +198,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: johnzhang777/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -230,7 +230,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: johnzhang777/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -263,7 +263,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: johnzhang777/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -297,7 +297,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run SpicyDiff
-        uses: your-name/spicydiff@v1
+        uses: johnzhang777/spicydiff@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           api-key: ${{ secrets.LLM_API_KEY }}
@@ -428,7 +428,7 @@ Each finding is tagged with severity: 🔴 HIGH / 🟡 MEDIUM / 🟢 LOW.
 
 ```yaml
 - name: Security Review
-  uses: your-name/spicydiff@v1
+  uses: johnzhang777/spicydiff@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     api-key: ${{ secrets.LLM_API_KEY }}
@@ -461,7 +461,7 @@ For small PRs (1-3 files), a single-pass review is used instead (faster and chea
 
 ### Do I need to clone / fork the SpicyDiff repository?
 
-**No.** The line `uses: your-name/spicydiff@v1` in the YAML file tells GitHub to fetch it automatically.
+**No.** The line `uses: johnzhang777/spicydiff@v1` in the YAML file tells GitHub to fetch it automatically.
 
 ### What is `GITHUB_TOKEN`? Do I need to create it?
 
@@ -570,7 +570,7 @@ If you want to contribute to SpicyDiff itself:
 ### Setup
 
 ```bash
-git clone https://github.com/your-name/spicydiff.git
+git clone https://github.com/johnzhang777/spicydiff.git
 cd spicydiff
 pip install -r requirements.txt
 ```
