@@ -11,7 +11,11 @@ from __future__ import annotations
 import json
 import os
 import sys
-from typing import List
+from typing import TYPE_CHECKING, List
+
+if TYPE_CHECKING:
+    from .diff_parser import PRDiff
+    from .models import ReviewResult
 
 # Threshold: PRs with more than this many files use multi-file review
 MULTI_FILE_THRESHOLD = 3
